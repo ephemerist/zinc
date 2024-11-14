@@ -200,11 +200,7 @@ class ConsistentAnalysisFormat(val mappers: ReadWriteMappers, sort: Boolean) {
 
   private[this] def writeAPIs(out: Serializer, apis: APIs, storeApis: Boolean): Unit = {
     def write(n: String, m: Map[String, AnalyzedClass]): Unit =
-      writeMaybeSortedStringMap(
-        out,
-        n,
-        m.mapValues(_.withCompilationTimestamp(DefaultCompilationTimestamp))
-      ) { ac =>
+      writeMaybeSortedStringMap(out, n, m) { ac =>
         writeAnalyzedClass(out, ac, storeApis)
       }
     write("internal", apis.internal)

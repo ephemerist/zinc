@@ -435,6 +435,7 @@ object MixedAnalyzingCompiler {
   def apply(config: CompileConfiguration)(
       implicit log: Logger
   ): MixedAnalyzingCompiler = {
+    val lookup = new LookupImpl(config, config.previousSetup)
     import config._
     val (searchClasspath, entry) = searchClasspathAndLookup(config)
     // Construct a compiler which can handle both java and scala sources.
@@ -446,6 +447,7 @@ object MixedAnalyzingCompiler {
         classpath,
         compiler.scalaInstance,
         compiler.classpathOptions,
+        lookup,
         entry,
         searchClasspath
       ),

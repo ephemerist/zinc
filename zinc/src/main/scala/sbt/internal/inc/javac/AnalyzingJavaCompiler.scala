@@ -54,6 +54,7 @@ final class AnalyzingJavaCompiler private[sbt] (
     val classpath: Seq[VirtualFile],
     val scalaInstance: xsbti.compile.ScalaInstance,
     val classpathOptions: ClasspathOptions,
+    lookup: Lookup,
     val classLookup: (String => Option[VirtualFile]),
     val searchClasspath: Seq[VirtualFile]
 ) extends JavaCompiler {
@@ -212,7 +213,8 @@ final class AnalyzingJavaCompiler private[sbt] (
             JavaAnalyze(newClasses.toSeq, srcs, log, output, finalJarOutput)(
               callback,
               loader,
-              readAPI
+              readAPI,
+              lookup.sourceFileName
             )
           } finally classes.close()
         }

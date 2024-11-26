@@ -80,6 +80,8 @@ private[sbt] object Parser {
 
       val attributes = array(in.readUnsignedShort())(parseAttribute())
 
+      override def annotations: Array[AnnotationInfo] = annotationsReferences(attributes).toArray
+
       lazy val sourceFile =
         for (sourceFileAttribute <- attributes.find(_.isSourceFile))
           yield toUTF8(entryIndex(sourceFileAttribute))
@@ -122,8 +124,26 @@ private[sbt] object Parser {
         // the risk of the warning not being noticed and the bug not being reported, but so be it.
         // (for the time being, at least!)
         def annotationsReferencesCarefully =
-          try annotationsReferences
-          catch {
+          try {
+            val infos = annotationsReferences(
+              attributes ++
+                fields.flatMap(_.attributes) ++
+                methods.flatMap(_.attributes))
+
+            def annoTypes(info: AnnotationInfo): List[String] = {
+              info.name +: info.fields.values.flatMap(annoArgTypes).toList
+            }
+            def annoArgTypes(arg: AnnotationArgument): List[String] =
+              arg match {
+                case Annotation(i)      => annoTypes(i)
+                case ClassArgument(c)   => List(c)
+                case EnumArgument(e, _) => List(e)
+                case StringArgument(_)  => Nil
+                case ArrayArgument(arr) => arr.toList.flatMap(annoArgTypes)
+                case UnmappedArgument   => Nil
+              }
+            infos.flatMap(annoTypes)
+          } catch {
             case re: RuntimeException =>
               log.warn(s"couldn't parse annotations in $readableName ($re)")
               List()
@@ -140,51 +160,59 @@ private[sbt] object Parser {
       private def fieldTypes = getTypes(fields)
       private def methodTypes = getTypes(methods)
 
-      private def annotationsReferences: List[String] = {
-        val allAttributes =
-          attributes ++
-            fields.flatMap(_.attributes) ++
-            methods.flatMap(_.attributes)
-        allAttributes
+      private def annotationsReferences(attributes: Array[AttributeInfo]): List[AnnotationInfo] = {
+        attributes
           .filter(x => x.isRuntimeVisibleAnnotations || x.isRuntimeInvisibleAnnotations)
           .flatMap { attr =>
             val in = new DataInputStream(new java.io.ByteArrayInputStream(attr.value))
             val numAnnotations = in.readUnsignedShort()
-            val result = collection.mutable.ListBuffer[String]()
-            def parseElementValue(): Unit = { // JVMS 4.7.16.1
+            val result = collection.mutable.ListBuffer[AnnotationInfo]()
+            def parseElementValue(): AnnotationArgument = { // JVMS 4.7.16.1
               val c = in.readUnsignedByte().toChar
               c match {
                 case 'e' =>
-                  result += slashesToDots(toUTF8(in.readUnsignedShort()))
-                  val _ = in.readUnsignedShort()
+                  EnumArgument(
+                    asClass(slashesToDots(toUTF8(in.readUnsignedShort()))),
+                    toUTF8(in.readUnsignedShort())
+                  )
                 case 'c' =>
-                  result += slashesToDots(toUTF8(in.readUnsignedShort()))
+                  ClassArgument(asClass(slashesToDots(toUTF8(in.readUnsignedShort()))))
                 case '@' =>
-                  parseAnnotation()
+                  Annotation(parseAnnotation())
                 case '[' =>
-                  for (_ <- 0 until in.readUnsignedShort())
-                    parseElementValue()
-                case 'B' | 'C' | 'D' | 'F' | 'I' | 'J' | 'S' | 'Z' | 's' =>
+                  ArrayArgument((0 until in.readUnsignedShort()).map(_ => parseElementValue()).toArray)
+                case 's' =>
+                  StringArgument(toUTF8(in.readUnsignedShort()))
+                case 'B' | 'C' | 'D' | 'F' | 'I' | 'J' | 'S' | 'Z' =>
+                  // TODO: proper support
                   val _ = in.readUnsignedShort()
+                  UnmappedArgument
                 case _ =>
                   // if we see something unexpected, we're likely already doomed and trying to
                   // continue parsing will just make troubleshooting harder. so let's bail
                   sys.error(s"unexpected tag in annotation: '$c'")
               }
             }
-            def parseAnnotation(): Unit = { // JVMS 4.7.16
-              result += slashesToDots(toUTF8(in.readUnsignedShort()))
+            def parseAnnotation(): AnnotationInfo = { // JVMS 4.7.16
+              val name = asClass(slashesToDots(toUTF8(in.readUnsignedShort())))
+              val fields = collection.mutable.Map[String, AnnotationArgument]()
               for (_ <- 0 until in.readUnsignedShort()) {
-                in.readUnsignedShort() // skip element name index
-                parseElementValue()
+                val name = toUTF8(in.readUnsignedShort()) // skip element name index
+                val value = parseElementValue()
+                fields += name -> value
               }
+              AnnotationInfo(name, fields.toMap)
             }
             for (_ <- 0 until numAnnotations)
-              parseAnnotation()
-            // the type names in the constant pool have the form e.g. `Ljava/lang/Object;`;
-            // we've already used `slashesToDots`, but we still need to drop the `L` and the semicolon
-            result.map(name => name.slice(1, name.length - 1))
+              result += parseAnnotation()
+            result
           }.toList
+      }
+
+      private def asClass(name: String) = {
+        // the type names in the constant pool have the form e.g. `Ljava/lang/Object;`;
+        // we've already used `slashesToDots`, but we still need to drop the `L` and the semicolon
+        name.slice(1, name.length - 1)
       }
 
       private def classConstantReferences =

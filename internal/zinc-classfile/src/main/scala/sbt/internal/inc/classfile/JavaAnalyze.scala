@@ -38,7 +38,8 @@ private[sbt] object JavaAnalyze {
   )(
       analysis: xsbti.AnalysisCallback,
       loader: ClassLoader,
-      readAPI: (VirtualFileRef, Seq[Class[?]]) => Set[(String, String)]
+      readAPI: (VirtualFileRef, Seq[Class[?]]) => Set[(String, String)],
+      sourceFileLookup: ClassFile => Option[String]
   ): Unit = {
     val sourceMap = sources
       .toSet[VirtualFile]
@@ -84,7 +85,7 @@ private[sbt] object JavaAnalyze {
       newClass <- newClasses
       classFile = Parser(newClass, log)
       _ <- classFile.sourceFile orElse guessSourceName(newClass.getFileName.toString)
-      source <- guessSourcePath(sourceMap, classFile, log)
+      source <- guessSourcePath(sourceMap, classFile, sourceFileLookup, log)
       binaryClassName = classFile.className
       loadedClass <- load(
         binaryClassName,
@@ -287,13 +288,14 @@ private[sbt] object JavaAnalyze {
   private def guessSourcePath(
       sourceNameMap: Map[String, Set[VirtualFile]],
       classFile: ClassFile,
+      sourceFileLookup: ClassFile => Option[String],
       log: Logger
   ): List[VirtualFile] = {
     val classNameParts = classFile.className.split("""\.""")
     val pkg = classNameParts.init
     val simpleClassName = classNameParts.last
     val sourceFileName =
-      classFile.sourceFile.getOrElse(simpleClassName.takeWhile(_ != '$').mkString("", "", ".java"))
+      sourceFileLookup(classFile).getOrElse(simpleClassName.takeWhile(_ != '$').mkString("", "", ".java"))
     val candidates = findSource(sourceNameMap, pkg.toList, sourceFileName)
     candidates match {
       case Nil      => log.warn("Could not determine source for class " + classFile.className)

@@ -16,7 +16,7 @@ package classfile
 
 import Constants._
 
-private[sbt] trait ClassFile {
+trait ClassFile {
   val majorVersion: Int
   val minorVersion: Int
   val className: String
@@ -27,6 +27,7 @@ private[sbt] trait ClassFile {
   val fields: Array[FieldOrMethodInfo]
   val methods: Array[FieldOrMethodInfo]
   val attributes: Array[AttributeInfo]
+  def annotations: Array[AnnotationInfo]
   val sourceFile: Option[String]
   def types: Set[String]
   def stringValue(a: AttributeInfo): String
@@ -91,13 +92,24 @@ private[sbt] final case class FieldOrMethodInfo(
   def isPublic = (accessFlags & ACC_PUBLIC) == ACC_PUBLIC
   def isMain = isPublic && isStatic && descriptor.exists(_ == "([Ljava/lang/String;)V")
 }
-private[sbt] final case class AttributeInfo(name: Option[String], value: Array[Byte]) {
+final case class AttributeInfo(name: Option[String], value: Array[Byte]) {
   def isNamed(s: String) = name.exists(s == _)
   def isSignature = isNamed("Signature")
   def isSourceFile = isNamed("SourceFile")
   def isRuntimeVisibleAnnotations = isNamed("RuntimeVisibleAnnotations")
   def isRuntimeInvisibleAnnotations = isNamed("RuntimeInvisibleAnnotations")
 }
+
+final case class AnnotationInfo(name: String, fields: Map[String, AnnotationArgument])
+
+sealed trait AnnotationArgument
+final case class Annotation(annotation: AnnotationInfo) extends AnnotationArgument
+final case class EnumArgument(tpe: String, value: String) extends AnnotationArgument
+final case class ClassArgument(clazz: String) extends AnnotationArgument
+final case class StringArgument(str: String) extends AnnotationArgument
+final case class ArrayArgument(args: Array[AnnotationArgument]) extends AnnotationArgument
+case object UnmappedArgument extends AnnotationArgument
+
 private[sbt] object Constants {
   final val ACC_STATIC = 0x0008
   final val ACC_PUBLIC = 0x0001

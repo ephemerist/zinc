@@ -11,6 +11,8 @@
 
 package sbt.internal.inc
 
+import sbt.internal.inc.classfile.ClassFile
+
 import java.util
 import java.util.Optional
 
@@ -67,6 +69,8 @@ trait Lookup extends ExternalLookup {
 trait ExternalLookup extends ExternalHooks.Lookup {
   import sbt.internal.inc.JavaInterfaceUtil.EnrichOption
   import scala.collection.JavaConverters._
+
+  def sourceFileName(classFile: ClassFile): Option[String] = classFile.sourceFile
 
   /**
    * Find the external `AnalyzedClass` (from another analysis) given a class name and, if available,

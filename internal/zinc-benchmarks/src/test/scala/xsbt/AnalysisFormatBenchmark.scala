@@ -56,7 +56,7 @@ class AnalysisFormatBenchmark {
     )
     writeAll(
       "-ref-cbin-nosort",
-      ConsistentFileAnalysisStore.binary(_, ReadWriteMappers.getEmptyMappers, sort = false),
+      ConsistentFileAnalysisStore.binary(_, ReadWriteMappers.getEmptyMappers, reproducible = false),
       cached
     )
     println("Sizes:")
@@ -94,7 +94,11 @@ class AnalysisFormatBenchmark {
     bh.consume(
       writeAll(
         "-test-cbin-nosort",
-        ConsistentFileAnalysisStore.binary(_, ReadWriteMappers.getEmptyMappers, sort = false),
+        ConsistentFileAnalysisStore.binary(
+          _,
+          ReadWriteMappers.getEmptyMappers,
+          reproducible = false
+        ),
         cached
       )
     )
@@ -104,7 +108,7 @@ class AnalysisFormatBenchmark {
     cached.foreach {
       case (s, a) =>
         val ser = new NullSerializer
-        val af = new ConsistentAnalysisFormat(ReadWriteMappers.getEmptyMappers, sort = true)
+        val af = new ConsistentAnalysisFormat(ReadWriteMappers.getEmptyMappers, reproducible = true)
         af.write(ser, a.getAnalysis, a.getMiniSetup)
         bh.consume(ser.count)
     }
@@ -115,7 +119,8 @@ class AnalysisFormatBenchmark {
     cached.foreach {
       case (s, a) =>
         val ser = new NullSerializer
-        val af = new ConsistentAnalysisFormat(ReadWriteMappers.getEmptyMappers, sort = false)
+        val af =
+          new ConsistentAnalysisFormat(ReadWriteMappers.getEmptyMappers, reproducible = false)
         af.write(ser, a.getAnalysis, a.getMiniSetup)
         bh.consume(ser.count)
     }
